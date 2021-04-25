@@ -14,7 +14,7 @@
 
 int next = 1;
 
-void childCommand(char input[]) {
+void childCmd(char input[]) {
 
     // Initialize an array of all commands
     char arguments[MAX_ARGS][100];
@@ -29,9 +29,8 @@ void childCommand(char input[]) {
     while((token = strtok_r(savePTR, " ", &savePTR))) {
 
         strcpy(arguments[count], token);
-        printf("%s", token);
-    }
 
+    }
 }
 
 void newProcess(char input[]) {
@@ -47,13 +46,14 @@ void newProcess(char input[]) {
         case -1:
 
             printf("Fork Failed\n");       // TODO: Remove test printf
+            fflush(stdout);
             exit(1);
             break;
         
         case 0:
 
             //printf("I am the child\n");       // TODO: Remove test printf
-            childCommand(input);
+            childCmd(input);
             break;
 
         default:
