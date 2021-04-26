@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/types.h> // pid_t
 #include <unistd.h> // fork
+#include <sys/wait.h> // waitpid
 
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
@@ -29,17 +30,24 @@ void childCmd(char input[]) {
     while((token = strtok_r(savePTR, " ", &savePTR))) {
 
         strcpy(arguments[count], token);
+        count++;
 
     }
+
+    for (int i = 0; i< 10; i++) {
+
+        printf("%s", arguments[i]);
+
+    }
+
 }
 
 void newProcess(char input[]) {
 
-    printf("New Process\n");       // TODO: Remove test printf
+    int childStatus = -5;
+    pid_t childPid;
 
-    pid_t spawnpid = -5;
-
-    spawnpid = fork();
+    pid_t spawnpid = fork();
 
     switch (spawnpid) {
         
@@ -58,9 +66,9 @@ void newProcess(char input[]) {
 
         default:
 
-            //printf("I am the parent\n");       // TODO: Remove test printf
+            childPid = waitpid(spawnpid, &childStatus, WNOHANG);
+            printf("I am the parent\n");       // TODO: Remove test printf
             break;
-
     }
 }
 
