@@ -12,8 +12,23 @@
 
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
+int exitStat = 0;
+
 
 int next = 1;
+
+void exitStatus(int stat) {
+
+    // If exited by status command
+    if (WIFEXITED(stat)) {
+		printf("Exit Value: %d\n", WEXITSTATUS(stat));
+	} 
+    
+    else {
+
+        printf("terminated by signal %d\n", WTERMSIG(stat));
+    }
+}
 
 void childCmd(char input[]) {
 
@@ -34,11 +49,7 @@ void childCmd(char input[]) {
 
     }
 
-    for (int i = 0; i< 10; i++) {
-
-        printf("%s", arguments[i]);
-
-    }
+    
 
 }
 
@@ -94,7 +105,7 @@ void builtInCommands(char input[], int flag) {
 
     switch (flag) {
 
-        case 1:
+        case 1: // cd
 
             // cd by itself
             if (count == 1) {
@@ -114,9 +125,9 @@ void builtInCommands(char input[], int flag) {
 
             break;
 
-        default:
-
-            printf("You typed status\n");       // TODO: Remove test printf
+        default: // status
+            
+            exitStatus(exitStat);
         
     }
 
