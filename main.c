@@ -17,11 +17,19 @@ int exitStat = 0;
 
 int next = 1;
 
+void clearArray(char** arguments, int argCount) {
+
+    for (int i = 0; i < argCount; i++) {
+        arguments[i] = NULL;
+    }
+
+}
+
 void exitStatus(int stat) {
 
     // If exited by status command
     if (WIFEXITED(stat)) {
-		printf("Exit Value: %d\n", WEXITSTATUS(stat));
+		printf("exit value: %d\n", WEXITSTATUS(stat));
 	} 
     
     else {
@@ -30,97 +38,58 @@ void exitStatus(int stat) {
     }
 }
 
-void childCmd(char input[]) {
 
-    // Initialize an array of all commands
-    char arguments[MAX_ARGS][100];
-
-    // Set up for strtok_r
-    char *originalInput = strdup(input);
-    char *savePTR = originalInput;
-    char *token;
-    int count = 0;
-
-    // Parse input into separate arguments 
-    while((token = strtok_r(savePTR, " ", &savePTR))) {
-
-        strcpy(arguments[count], token);
-        count++;
-
-    }
-
-    
-
-}
-
-void newProcess(char input[]) {
+void newProcess(char** arguments, int argCount) {
 
     int childStatus = -5;
-    pid_t childPid;
 
     pid_t spawnpid = fork();
 
-    switch (spawnpid) {
-        
-        case -1:
+    if (spawnpid < 0) {
 
-            printf("Fork Failed\n");       // TODO: Remove test printf
-            fflush(stdout);
-            exit(1);
-            break;
-        
-        case 0:
-
-            //printf("I am the child\n");       // TODO: Remove test printf
-            childCmd(input);
-            break;
-
-        default:
-
-            childPid = waitpid(spawnpid, &childStatus, WNOHANG);
-            printf("I am the parent\n");       // TODO: Remove test printf
-            break;
+        printf("Fork Failed\n");       // TODO: Remove test printf
+        fflush(stdout);
+        exit(1);
+    
     }
+
+    else if (spawnpid == 0) {
+
+        execvp(arguments[0], arguments);
+        perror("Error");
+        exit(1);
+
+    }
+
+    else {
+
+        pid_t childPid;
+        childPid = waitpid(spawnpid, &childStatus, 0);
+        //exit(0);
+
+    }
+
+    clearArray(arguments, argCount);
+
 }
 
 
-void builtInCommands(char input[], int flag) {
+void builtInCommands(char** arguments, int flag, int argCount) {
 
-    // Try to consolidate the multiple instances of this
-    char arguments[MAX_ARGS][100];
-
-    // Set up for strtok_r
-    char *originalInput = strdup(input);
-    char *savePTR = originalInput;
-    char *token;
-    int count = 0;
-
-    // Parse input into separate arguments 
-    while((token = strtok_r(savePTR, " ", &savePTR))) {
-
-        strcpy(arguments[count], token);
-        count++;
-
-    }
-
+    
     switch (flag) {
 
         case 1: // cd
 
             // cd by itself
-            if (count == 1) {
+            if (argCount == 1) {
                 chdir(getenv("HOME"));
             }
             // cd with arguments
             else {
-                int len = strlen(arguments[1]);
-                char path[len];
-                char nullChar = NULL;
 
-                strcpy(path, arguments[1]);
-                path[len-1] = nullChar;
+                chdir(arguments[1]);
 
-                chdir(path);
             }
 
             break;
@@ -131,52 +100,79 @@ void builtInCommands(char input[], int flag) {
         
     }
 
+    clearArray(arguments, argCount);
+
+}
+
+int getArguments(char** arguments, char input[]) {
+
+
+    char *originalInput = strdup(input);
+    char *savePTR = originalInput;
+    char *token;
+    int count = 0;
+
+    // Parse input into separate arguments 
+    while((token = strtok_r(savePTR, " \n", &savePTR))) {
+
+        // strcpy(arguments[count], token);
+        arguments[count] = token;
+        count++;
+
+    }
+
+    return count;
 
 }
 
 void userInput() {
 
-
+    char *arguments[MAX_ARGS];
     char input[MAX_CHARS];
+    int argCount;
 
     // Get input from user
     printf(": ");
     fflush(stdout);
     fgets(input, sizeof(input), stdin);
 
+    argCount = getArguments(arguments, input);
+
         // Check for built in command 'exit'
-    if (strncmp(input, "exit", 4) == 0) {
+    if (strncmp(arguments[0], "exit", 4) == 0) {
 
         next = 0;
         return;
 
     }
         // Check if the input starts with # or is a blank line
-    else if ((strncmp(input, "#", 1) == 0) || (strlen(input) == 1)) {
+    else if ((strncmp(arguments[0], "#", 1) == 0) || (strlen(arguments[0]) == 1)) {
 
         return;
 
     } 
         // Check for other built in commands, excluding exit
-    else if ((strncmp(input, "cd", 2) == 0) || (strncmp(input, "status", 6) == 0)) {
+    else if ((strncmp(arguments[0], "cd", 2) == 0) || (strncmp(arguments[0], "status", 6) == 0)) {
 
         // Set flag to which built in, and send to builtInCommands() for processing
         int flag = 0;
-        if (strncmp(input, "cd", 2) == 0) {
+        if (strncmp(arguments[0], "cd", 2) == 0) {
 
             flag = 1;
 
         }
         
-        builtInCommands(input, flag);
+        builtInCommands(arguments, flag, argCount);
 
     }
         // Else send to newProcess() function
     else {
 
-        newProcess(input);
+        newProcess(arguments, argCount);
 
     }
+
+    clearArray(arguments, argCount);
 
     return;
 
@@ -184,8 +180,6 @@ void userInput() {
 
 
 int main(int argc, char *argv[]) {
-
-    char input[MAX_CHARS];
 
     while (next == 1) {
 
