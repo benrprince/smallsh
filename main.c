@@ -75,11 +75,43 @@ void newProcess(char input[]) {
 
 void builtInCommands(char input[], int flag) {
 
+    // Try to consolidate the multiple instances of this
+    char arguments[MAX_ARGS][100];
+
+    // Set up for strtok_r
+    char *originalInput = strdup(input);
+    char *savePTR = originalInput;
+    char *token;
+    int count = 0;
+
+    // Parse input into separate arguments 
+    while((token = strtok_r(savePTR, " ", &savePTR))) {
+
+        strcpy(arguments[count], token);
+        count++;
+
+    }
+
     switch (flag) {
 
         case 1:
 
-            printf("You typed cd\n");       // TODO: Remove test printf
+            // cd by itself
+            if (count == 1) {
+                chdir(getenv("HOME"));
+            }
+            // cd with arguments
+            else {
+                int len = strlen(arguments[1]);
+                char path[len];
+                char nullChar = NULL;
+
+                strcpy(path, arguments[1]);
+                path[len-1] = nullChar;
+
+                chdir(path);
+            }
+
             break;
 
         default:
