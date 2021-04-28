@@ -57,7 +57,8 @@ void newProcess(char** arguments, int argCount) {
 
         execvp(arguments[0], arguments);
         perror("Error");
-        exit(1);
+        fflush(stdout);
+        exit(2);
 
     }
 
