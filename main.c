@@ -13,9 +13,8 @@
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
 int exitStat = 0;
-
-
 int next = 1;
+
 
 void clearArray(char** arguments, int argCount) {
 
@@ -30,24 +29,81 @@ void exitStatus(int stat) {
     // If exited by status command
     if (WIFEXITED(stat)) {
 		printf("exit value: %d\n", WEXITSTATUS(stat));
+        fflush(stdout);
 	} 
     
     else {
 
         printf("terminated by signal %d\n", WTERMSIG(stat));
+        fflush(stdout);
     }
+}
+
+void redirectCheck(char** arguments, int argCount) {
+
+    int targetFD;
+    char* sourceFD;
+    int redirected = 0;
+
+    for (int i = 1; i < argCount; i++) {
+        if (strcmp(arguments[i], "<") == 0) {
+            redirected = 1;
+            sourceFD = strdup(arguments[i+1]);
+
+            targetFD = open(sourceFD, O_RDONLY);
+            if (targetFD == -1) {
+                printf("Cannot open file");
+                fflush(stdout);
+                exit(1);
+            }
+            if (dup2(targetFD, STDIN_FILENO) == -1) {
+                printf("Error");
+                fflush(stdout);
+                exit(1);
+            }
+            close(targetFD);
+            free(sourceFD);
+        }
+
+        else if (strcmp(arguments[i], ">") == 0) {
+            redirected = 1;
+            sourceFD = strdup(arguments[i+1]);
+
+            targetFD = open(sourceFD, O_CREAT | O_RDWR | O_TRUNC, 0644); //Possible Change
+            if (targetFD == -1) {
+                printf("Cannot open file");
+                fflush(stdout);
+                exit(1);
+            }
+            if (dup2(targetFD, STDOUT_FILENO) == -1) {
+                printf("Error");
+                fflush(stdout);
+                exit(1);
+            }
+            close(targetFD);
+            free(sourceFD);
+        }
+    }
+    
+    if (redirected != 0) {
+
+        for(int i = 1; i < argCount; i++) {
+			arguments[i] = NULL;
+        }
+
+    }
+
 }
 
 
 void newProcess(char** arguments, int argCount) {
 
     int childStatus = -5;
-
     pid_t spawnpid = fork();
 
     if (spawnpid < 0) {
 
-        printf("Fork Failed\n");       // TODO: Remove test printf
+        printf("Fork Failed\n");
         fflush(stdout);
         exit(1);
     
@@ -55,10 +111,13 @@ void newProcess(char** arguments, int argCount) {
 
     else if (spawnpid == 0) {
 
+        // Check for redirect and handle
+        redirectCheck(arguments, argCount);
+
         execvp(arguments[0], arguments);
-        perror("Error");
+        printf("Error executing command\n");
         fflush(stdout);
-        exit(2);
+        exit(0);
 
     }
 
@@ -107,6 +166,11 @@ void builtInCommands(char** arguments, int flag, int argCount) {
 
 int getArguments(char** arguments, char input[]) {
 
+    // Ignore SIGINT
+    struct sigaction SIGINT_action = {0};
+	SIGINT_action.sa_handler = SIG_IGN;
+	sigaction(SIGINT, &SIGINT_action, NULL);
+
 
     char *originalInput = strdup(input);
     char *savePTR = originalInput;
@@ -116,7 +180,6 @@ int getArguments(char** arguments, char input[]) {
     // Parse input into separate arguments 
     while((token = strtok_r(savePTR, " \n", &savePTR))) {
 
-        // strcpy(arguments[count], token);
         arguments[count] = token;
         count++;
 
