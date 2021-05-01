@@ -14,6 +14,10 @@
 #define MAX_ARGS 512
 int exitStat = 0;
 int next = 1;
+int childStatus = -5;
+int background = 0;
+int bgProc[100];
+int bgCount = 0;
 
 
 void clearArray(char** arguments, int argCount) {
@@ -28,7 +32,7 @@ void exitStatus(int stat) {
 
     // If exited by status command
     if (WIFEXITED(stat)) {
-		printf("exit value: %d\n", WEXITSTATUS(stat));
+		printf("exit value %d\n", WEXITSTATUS(stat));
         fflush(stdout);
 	} 
     
@@ -52,7 +56,7 @@ void redirectCheck(char** arguments, int argCount) {
 
             targetFD = open(sourceFD, O_RDONLY);
             if (targetFD == -1) {
-                printf("Cannot open file");
+                printf("Cannot open file\n");
                 fflush(stdout);
                 exit(1);
             }
@@ -98,7 +102,6 @@ void redirectCheck(char** arguments, int argCount) {
 
 void newProcess(char** arguments, int argCount) {
 
-    int childStatus = -5;
     pid_t spawnpid = fork();
 
     if (spawnpid < 0) {
@@ -123,13 +126,33 @@ void newProcess(char** arguments, int argCount) {
 
     else {
 
-        pid_t childPid;
-        childPid = waitpid(spawnpid, &childStatus, 0);
-        //exit(0);
+        if (background == 0) {
 
+            pid_t childPid = waitpid(spawnpid, &childStatus, 0);
+
+        }
+
+        else {
+            
+            pid_t childPid = waitpid(spawnpid, &childStatus, WNOHANG);
+            bgProc[bgCount] = childPid;
+            bgCount = bgCount + 1;
+
+            printf("Background pid: %d\n", spawnpid);
+            fflush(stdout);
+
+        }
     }
 
-    clearArray(arguments, argCount);
+    for (int i = 0; i < bgCount; i++) {
+
+        while (spawnpid = (waitpid(bgProc[i], &childStatus, WNOHANG)) > 0) {
+
+            printf("child %d terminated: ", bgProc[i]);
+            exitStatus(childStatus);
+
+        }
+    }
 
 }
 
@@ -166,12 +189,6 @@ void builtInCommands(char** arguments, int flag, int argCount) {
 
 int getArguments(char** arguments, char input[]) {
 
-    // Ignore SIGINT
-    struct sigaction SIGINT_action = {0};
-	SIGINT_action.sa_handler = SIG_IGN;
-	sigaction(SIGINT, &SIGINT_action, NULL);
-
-
     char *originalInput = strdup(input);
     char *savePTR = originalInput;
     char *token;
@@ -182,7 +199,6 @@ int getArguments(char** arguments, char input[]) {
 
         arguments[count] = token;
         count++;
-
     }
 
     return count;
@@ -191,26 +207,52 @@ int getArguments(char** arguments, char input[]) {
 
 void userInput() {
 
+    // // Ignore ^C
+    // struct sigaction SIGINT_action = {0};
+	// SIGINT_action.sa_handler = SIG_IGN;
+	// sigaction(SIGINT, &SIGINT_action, NULL);
+
     char *arguments[MAX_ARGS];
     char input[MAX_CHARS];
     int argCount;
 
-    // Get input from user
+    // Get input from user and remove new line char
     printf(": ");
     fflush(stdout);
     fgets(input, sizeof(input), stdin);
+    input[strcspn(input, "\n")] = 0;
+
+    if (strcmp(input, "") == 0) {
+        pid_t spawnpid;
+        while (spawnpid = waitpid(-1, &childStatus, WNOHANG) > 0) {
+
+            printf("child %d terminated: ", spawnpid);
+            exitStatus(childStatus);
+
+        }
+        return;
+
+    }
 
     argCount = getArguments(arguments, input);
 
+    // Check for background process
+    if (strncmp(arguments[argCount - 1], "&", 1) == 0) {
+
+        argCount = argCount - 1;
+        arguments[argCount] = NULL;
+        background = 1;
+
+    }
+
         // Check for built in command 'exit'
     if (strncmp(arguments[0], "exit", 4) == 0) {
-
         next = 0;
         return;
 
     }
-        // Check if the input starts with # or is a blank line
-    else if ((strncmp(arguments[0], "#", 1) == 0) || (strlen(arguments[0]) == 1)) {
+        // Check if the input starts with #
+    else if (strncmp(arguments[0], "#", 1) == 0) {
 
         return;
 
@@ -236,17 +278,52 @@ void userInput() {
 
     }
 
+    // Reset for next command
+    background = 0;
     clearArray(arguments, argCount);
-
     return;
 
 }
 
+// void catchSIGTSTP(int signo) {
+
+// 	// If it's 1, set it to 0 and display a message reentrantly
+// 	if (background == 1) {
+// 		char* message = "Entering foreground-only mode (& is now ignored)\n";
+// 		write(1, message, 49);
+// 		fflush(stdout);
+// 		background = 0;
+// 	}
+
+// 	// If it's 0, set it to 1 and display a message reentrantly
+// 	else {
+// 		char* message = "Exiting foreground-only mode\n";
+// 		write (1, message, 29);
+// 		fflush(stdout);
+// 		background = 1;
+// 	}
+// }
+
 
 int main(int argc, char *argv[]) {
 
+    // // Ignore ^C
+	// struct sigaction sa_sigint = {0};
+	// sa_sigint.sa_handler = SIG_IGN;
+	// sigfillset(&sa_sigint.sa_mask);
+	// sa_sigint.sa_flags = 0;
+	// sigaction(SIGINT, &sa_sigint, NULL);
+
+	// // Redirect ^Z to catchSIGTSTP()
+	// struct sigaction sa_sigtstp = {0};
+	// sa_sigtstp.sa_handler = catchSIGTSTP;
+	// sigfillset(&sa_sigtstp.sa_mask);
+	// sa_sigtstp.sa_flags = 0;
+	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
+
     while (next == 1) {
 
+        //checkBackground();
         userInput();
 
     }
