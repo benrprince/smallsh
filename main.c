@@ -128,31 +128,41 @@ void newProcess(char** arguments, int argCount) {
 
         if (background == 0) {
 
-            pid_t childPid = waitpid(spawnpid, &childStatus, 0);
+            //pid_t childPid = waitpid(spawnpid, &childStatus, 0);     See if this works then remove one
+            waitpid(spawnpid, &childStatus, 0);
 
         }
 
         else {
-            
-            pid_t childPid = waitpid(spawnpid, &childStatus, WNOHANG);
-            bgProc[bgCount] = childPid;
-            bgCount = bgCount + 1;
 
+            bgProc[bgCount] = spawnpid;
+            bgCount++;
+            waitpid(spawnpid, &childStatus, WNOHANG);
             printf("Background pid: %d\n", spawnpid);
             fflush(stdout);
+            
+            // pid_t childPid = waitpid(spawnpid, &childStatus, WNOHANG);
+            // bgProc[0] = spawnpid;
+            // bgCount = bgCount + 1;
+
+            // printf("%d\n", bgProc[bgCount]);
+
+            // printf("Background pid: %d\n", spawnpid);
+            // fflush(stdout);
 
         }
     }
 
-    for (int i = 0; i < bgCount; i++) {
+    // while (waitpid(-1, &childStatus, WNOHANG) > 0) {
 
-        while (spawnpid = (waitpid(bgProc[i], &childStatus, WNOHANG)) > 0) {
+    //     spawnpid = waitpid(-1, &childStatus, WNOHANG);
+    //     printf("%d\n", bgProc[bgCount]);
 
-            printf("child %d terminated: ", bgProc[i]);
-            exitStatus(childStatus);
+    //     printf("child %d terminated: ", bgProc[0]);
+    //     exitStatus(childStatus);
+    //     fflush(stdout);
 
-        }
-    }
+    // }
 
 }
 
@@ -223,13 +233,8 @@ void userInput() {
     input[strcspn(input, "\n")] = 0;
 
     if (strcmp(input, "") == 0) {
-        pid_t spawnpid;
-        while (spawnpid = waitpid(-1, &childStatus, WNOHANG) > 0) {
 
-            printf("child %d terminated: ", spawnpid);
-            exitStatus(childStatus);
-
-        }
+        // Possibly put something here to look for be processes
         return;
 
     }
@@ -304,6 +309,34 @@ void userInput() {
 // 	}
 // }
 
+void checkBackground() {
+
+    for(int i = 0; i < bgCount; i++) {
+
+        if(waitpid(bgProc[i], &childStatus, WNOHANG) > 0) {
+
+            if (WIFSIGNALED(childStatus)) {
+				printf("background child %d terminated: ", bgProc[i]);			//Child PID	
+				printf("terminated by signal %d\n", WTERMSIG(childStatus));		//Signal number
+
+			}
+
+			if (WIFEXITED(childStatus)) {
+			
+                printf("background child %d is done: ", bgProc[i]);
+				printf("exit value %d\n", WEXITSTATUS(childStatus));
+
+			}
+
+        }
+
+
+
+    }
+
+
+}
+
 
 int main(int argc, char *argv[]) {
 
@@ -323,7 +356,7 @@ int main(int argc, char *argv[]) {
 
     while (next == 1) {
 
-        //checkBackground();
+        checkBackground();
         userInput();
 
     }
