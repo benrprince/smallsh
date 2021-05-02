@@ -14,6 +14,7 @@
 // Global Variables
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
+int pid;
 int exitStat = 0;
 int next = 1;
 int childStatus = -5;
@@ -26,6 +27,7 @@ int bgCount = 0;
 // Structs for catching signals ^C and ^Z
 struct sigaction SIGINT_action = {0};
 struct sigaction SIGTSTP_action = {0};
+
 
 
 void clearArray(char** arguments, int argCount) {
@@ -75,15 +77,16 @@ void redirectCheck(char** arguments, int argCount) {
             }
             close(targetFD);
             free(sourceFD);
+
         }
 
         else if (strcmp(arguments[i], ">") == 0) {
             redirected = 1;
             sourceFD = strdup(arguments[i+1]);
 
-            targetFD = open(sourceFD, O_CREAT | O_RDWR | O_TRUNC, 0644); //Possible Change
+            targetFD = open(sourceFD, O_CREAT | O_RDWR | O_TRUNC, 0644);
             if (targetFD == -1) {
-                printf("Cannot open file");
+                printf("Cannot open file\n");
                 fflush(stdout);
                 exit(1);
             }
@@ -94,6 +97,7 @@ void redirectCheck(char** arguments, int argCount) {
             }
             close(targetFD);
             free(sourceFD);
+
         }
     }
     
@@ -125,6 +129,11 @@ void newProcess(char** arguments, int argCount) {
         // Reset Ctrl-C as the default for child process
         SIGINT_action.sa_handler = SIG_DFL;
 		sigaction(SIGINT, &SIGINT_action, NULL);
+
+        // Ignore Ctrl-Z
+        SIGTSTP_action.sa_handler = SIG_IGN;
+		sigaction(SIGTSTP, &SIGTSTP_action, NULL);
+        printf("%s", arguments[0]);
 
         // Check for redirect and handle
         redirectCheck(arguments, argCount);
@@ -208,6 +217,7 @@ int getArguments(char** arguments, char input[]) {
 
 }
 
+
 void userInput() {
 
     char *arguments[MAX_ARGS];
@@ -219,6 +229,20 @@ void userInput() {
     fflush(stdout);
     fgets(input, sizeof(input), stdin);
     input[strcspn(input, "\n")] = 0;
+
+	for (int i = 0; i < strlen(input); i ++) {
+		// Remove $$ and add pid
+		if ( (input[i] == '$') && (i + 1 < strlen(input)) && (input[i + 1] == '$') ) {
+
+            char buffer[100];
+            input[i] = '\0';
+
+            strcpy(buffer, input);
+            strcat(buffer, "%d");
+			sprintf(input, buffer, getpid());
+
+		}
+	}
 
     if (strcmp(input, "") == 0) {
 
@@ -250,6 +274,8 @@ void userInput() {
 
         // Check for built in command 'exit'
     if (strncmp(arguments[0], "exit", 4) == 0) {
+
+        // This will break out of the while loop in main
         next = 0;
         return;
 
@@ -350,6 +376,9 @@ int main(int argc, char *argv[]) {
     sigfillset(&SIGTSTP_action.sa_mask);
     SIGTSTP_action.sa_flags = 0;
     sigaction(SIGTSTP, &SIGTSTP_action, NULL);
+
+    // Set pid to the pid of smallsh program
+    pid = getpid();
 
     while (next == 1) {
 
