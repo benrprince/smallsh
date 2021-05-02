@@ -245,7 +245,7 @@ void userInput() {
 	}
 
     if (strcmp(input, "") == 0) {
-
+        
         return;
 
     }
@@ -283,6 +283,7 @@ void userInput() {
         // Check if the input starts with #
     else if (strncmp(arguments[0], "#", 1) == 0) {
 
+        clearArray(arguments, argCount);
         return;
 
     } 
