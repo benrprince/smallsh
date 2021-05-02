@@ -6,18 +6,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h> // pid_t
-#include <unistd.h> // fork
-#include <sys/wait.h> // waitpid
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <signal.h>
 
+// Global Variables
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
 int exitStat = 0;
 int next = 1;
 int childStatus = -5;
+// Variables to manage background status
 int background = 0;
+int fgOnlyMode = 0;
+// Variables to manage background PIDs
 int bgProc[100];
 int bgCount = 0;
+// Structs for catching signals ^C and ^Z
+struct sigaction SIGINT_action = {0};
+struct sigaction SIGTSTP_action = {0};
 
 
 void clearArray(char** arguments, int argCount) {
@@ -114,6 +122,10 @@ void newProcess(char** arguments, int argCount) {
 
     else if (spawnpid == 0) {
 
+        // Reset Ctrl-C as the default for child process
+        SIGINT_action.sa_handler = SIG_DFL;
+		sigaction(SIGINT, &SIGINT_action, NULL);
+
         // Check for redirect and handle
         redirectCheck(arguments, argCount);
 
@@ -128,7 +140,6 @@ void newProcess(char** arguments, int argCount) {
 
         if (background == 0) {
 
-            //pid_t childPid = waitpid(spawnpid, &childStatus, 0);     See if this works then remove one
             waitpid(spawnpid, &childStatus, 0);
 
         }
@@ -140,29 +151,11 @@ void newProcess(char** arguments, int argCount) {
             waitpid(spawnpid, &childStatus, WNOHANG);
             printf("Background pid: %d\n", spawnpid);
             fflush(stdout);
-            
-            // pid_t childPid = waitpid(spawnpid, &childStatus, WNOHANG);
-            // bgProc[0] = spawnpid;
-            // bgCount = bgCount + 1;
-
-            // printf("%d\n", bgProc[bgCount]);
-
-            // printf("Background pid: %d\n", spawnpid);
-            // fflush(stdout);
 
         }
     }
 
-    // while (waitpid(-1, &childStatus, WNOHANG) > 0) {
-
-    //     spawnpid = waitpid(-1, &childStatus, WNOHANG);
-    //     printf("%d\n", bgProc[bgCount]);
-
-    //     printf("child %d terminated: ", bgProc[0]);
-    //     exitStatus(childStatus);
-    //     fflush(stdout);
-
-    // }
+    fflush(stdout);
 
 }
 
@@ -217,11 +210,6 @@ int getArguments(char** arguments, char input[]) {
 
 void userInput() {
 
-    // // Ignore ^C
-    // struct sigaction SIGINT_action = {0};
-	// SIGINT_action.sa_handler = SIG_IGN;
-	// sigaction(SIGINT, &SIGINT_action, NULL);
-
     char *arguments[MAX_ARGS];
     char input[MAX_CHARS];
     int argCount;
@@ -234,21 +222,31 @@ void userInput() {
 
     if (strcmp(input, "") == 0) {
 
-        // Possibly put something here to look for be processes
         return;
 
     }
 
     argCount = getArguments(arguments, input);
 
-    // Check for background process
+    // Check for background process, if foreground mode is not on
     if (strncmp(arguments[argCount - 1], "&", 1) == 0) {
+        
+        // If foreground mode is not on
+        if (fgOnlyMode == 0) {
+            argCount = argCount - 1;
+            arguments[argCount] = NULL;
+            background = 1;
 
-        argCount = argCount - 1;
-        arguments[argCount] = NULL;
-        background = 1;
+        }
 
-    }
+        // Foreground mode is on
+        else {
+
+            argCount = argCount - 1;
+            arguments[argCount] = NULL;
+
+        }
+    } 
 
         // Check for built in command 'exit'
     if (strncmp(arguments[0], "exit", 4) == 0) {
@@ -290,25 +288,6 @@ void userInput() {
 
 }
 
-// void catchSIGTSTP(int signo) {
-
-// 	// If it's 1, set it to 0 and display a message reentrantly
-// 	if (background == 1) {
-// 		char* message = "Entering foreground-only mode (& is now ignored)\n";
-// 		write(1, message, 49);
-// 		fflush(stdout);
-// 		background = 0;
-// 	}
-
-// 	// If it's 0, set it to 1 and display a message reentrantly
-// 	else {
-// 		char* message = "Exiting foreground-only mode\n";
-// 		write (1, message, 29);
-// 		fflush(stdout);
-// 		background = 1;
-// 	}
-// }
-
 void checkBackground() {
 
     for(int i = 0; i < bgCount; i++) {
@@ -317,42 +296,60 @@ void checkBackground() {
 
             if (WIFSIGNALED(childStatus)) {
 				printf("background child %d terminated: ", bgProc[i]);			//Child PID	
+                fflush(stdout);
 				printf("terminated by signal %d\n", WTERMSIG(childStatus));		//Signal number
+                fflush(stdout);
 
 			}
 
 			if (WIFEXITED(childStatus)) {
 			
                 printf("background child %d is done: ", bgProc[i]);
+                fflush(stdout);
 				printf("exit value %d\n", WEXITSTATUS(childStatus));
+                fflush(stdout);
 
 			}
 
         }
+    }
+}
 
+void handle_SIGTSTP() {
 
+    // Foreground mode is currently not turned on, turn it on
+    if (fgOnlyMode == 0) {
+
+        printf("\nEntering foreground-only mode (& is now ignored)\n");
+        fflush(stdout);
+        fgOnlyMode = 1;
 
     }
 
+    // Foreground mode is currently turned on, turn it off
+    else {
 
+        printf("\nExiting foreground-only mode\n");
+        fflush(stdout);
+        fgOnlyMode = 0;
+
+    }
 }
 
 
 int main(int argc, char *argv[]) {
 
-    // // Ignore ^C
-	// struct sigaction sa_sigint = {0};
-	// sa_sigint.sa_handler = SIG_IGN;
-	// sigfillset(&sa_sigint.sa_mask);
-	// sa_sigint.sa_flags = 0;
-	// sigaction(SIGINT, &sa_sigint, NULL);
+    // Ignore Ctrl-C
+	SIGINT_action.sa_handler = SIG_IGN;
+	sigfillset(&SIGINT_action.sa_mask);
+	SIGINT_action.sa_flags = 0;
+	sigaction(SIGINT, &SIGINT_action, NULL);
 
-	// // Redirect ^Z to catchSIGTSTP()
-	// struct sigaction sa_sigtstp = {0};
-	// sa_sigtstp.sa_handler = catchSIGTSTP;
-	// sigfillset(&sa_sigtstp.sa_mask);
-	// sa_sigtstp.sa_flags = 0;
-	// sigaction(SIGTSTP, &sa_sigtstp, NULL);
+    // Catch Ctrl-Z and send to handler function
+    SIGTSTP_action.sa_handler = handle_SIGTSTP;
+    sigfillset(&SIGTSTP_action.sa_mask);
+    SIGTSTP_action.sa_flags = 0;
+    sigaction(SIGTSTP, &SIGTSTP_action, NULL);
 
     while (next == 1) {
 
