@@ -1,6 +1,12 @@
-// Author: Ben Prince
-// Assignment 3: Smallsh
-// Date: 05/03/2021
+/************************************************************************
+    Author: Ben Prince
+    Assignment 3: Smallsh
+    Date: 05/03/2021
+Sources:
+https://www.tutorialspoint.com
+https://www.youtube.com/channel/UC6qj_bPq6tQ6hLwOBpBQ42Q
+https://www.youtube.com/user/jms36086
+*************************************************************************/
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -14,7 +20,6 @@
 // Global Variables
 #define MAX_CHARS 2048
 #define MAX_ARGS 512
-int pid;
 int exitStat = 0;
 int next = 1;
 int childStatus = -5;
@@ -31,6 +36,11 @@ struct sigaction SIGTSTP_action = {0};
 
 
 void clearArray(char** arguments, int argCount) {
+    /***********************************************
+    *   Params: char** argument array, int arg count
+    *   Returns: NA
+    *   Desc: Clears argument array for next command
+    ***********************************************/
 
     for (int i = 0; i < argCount; i++) {
         arguments[i] = NULL;
@@ -39,8 +49,12 @@ void clearArray(char** arguments, int argCount) {
 }
 
 void exitStatus(int stat) {
+    /***********************************************
+    *   Params: int child status
+    *   Returns: NA
+    *   Desc: Prints out the exit status
+    ***********************************************/
 
-    // If exited by status command
     if (WIFEXITED(stat)) {
 		printf("exit value %d\n", WEXITSTATUS(stat));
         fflush(stdout);
@@ -54,12 +68,19 @@ void exitStatus(int stat) {
 }
 
 void redirectCheck(char** arguments, int argCount) {
+    /***********************************************
+    *   Params: char** argument array, int arg count
+    *   Returns: NA
+    *   Desc: Checks for redirect "<" or ">" and handles
+    *         whatever redirection is specified
+    ***********************************************/
 
     int targetFD;
     char* sourceFD;
     int redirected = 0;
 
     for (int i = 1; i < argCount; i++) {
+        // if < redirect stdout
         if (strcmp(arguments[i], "<") == 0) {
             redirected = 1;
             sourceFD = strdup(arguments[i+1]);
@@ -79,12 +100,12 @@ void redirectCheck(char** arguments, int argCount) {
             free(sourceFD);
 
         }
-
+        // if > redirect stdin
         else if (strcmp(arguments[i], ">") == 0) {
             redirected = 1;
             sourceFD = strdup(arguments[i+1]);
 
-            targetFD = open(sourceFD, O_CREAT | O_RDWR | O_TRUNC, 0644);
+            targetFD = open(sourceFD, O_CREAT | O_RDWR | O_TRUNC, 0666);
             if (targetFD == -1) {
                 printf("Cannot open file\n");
                 fflush(stdout);
@@ -101,6 +122,7 @@ void redirectCheck(char** arguments, int argCount) {
         }
     }
     
+    // if there was redirection remove commands except for the first command
     if (redirected != 0) {
 
         for(int i = 1; i < argCount; i++) {
@@ -113,6 +135,11 @@ void redirectCheck(char** arguments, int argCount) {
 
 
 void newProcess(char** arguments, int argCount) {
+    /***********************************************
+    *   Params: char** argument array, int arg count
+    *   Returns: NA
+    *   Desc: Forks into child process.
+    ***********************************************/
 
     pid_t spawnpid = fork();
 
@@ -146,7 +173,7 @@ void newProcess(char** arguments, int argCount) {
     }
 
     else {
-
+        // Not in background mode so parent waits
         if (background == 0) {
 
             waitpid(spawnpid, &childStatus, 0);
@@ -154,7 +181,8 @@ void newProcess(char** arguments, int argCount) {
         }
 
         else {
-
+            // In background mode so parent doesn't wait
+            // and spawnpid is saved in the background array
             bgProc[bgCount] = spawnpid;
             bgCount++;
             waitpid(spawnpid, &childStatus, WNOHANG);
@@ -170,6 +198,11 @@ void newProcess(char** arguments, int argCount) {
 
 
 void builtInCommands(char** arguments, int flag, int argCount) {
+    /***********************************************
+    *   Params: char** argument array, int cd/status flag, int arg count
+    *   Returns: NA
+    *   Desc: Runs the built in commands status and cd 
+    ***********************************************/
 
     
     switch (flag) {
@@ -200,6 +233,12 @@ void builtInCommands(char** arguments, int flag, int argCount) {
 }
 
 int getArguments(char** arguments, char input[]) {
+    /***********************************************
+    *   Params: char** argument array, char [] input string
+    *   Returns: int, number of arguments parsed
+    *   Desc: Uses strtok_r to parse each argument into
+    *         arguments array.    
+    ***********************************************/
 
     char *originalInput = strdup(input);
     char *savePTR = originalInput;
@@ -219,6 +258,13 @@ int getArguments(char** arguments, char input[]) {
 
 
 void userInput() {
+    /***********************************************
+    *   Params: NA
+    *   Returns: NA
+    *   Desc: Gets input from the user and calls getArguments()
+    *         to put them into an array. Checks for Built in
+    *         commands. If those aren't found sends to exec()   
+    ***********************************************/
 
     char *arguments[MAX_ARGS];
     char input[MAX_CHARS];
@@ -228,8 +274,10 @@ void userInput() {
     printf(": ");
     fflush(stdout);
     fgets(input, sizeof(input), stdin);
-    input[strcspn(input, "\n")] = 0;
+    // Source: https://www.tutorialspoint.com/c_standard_library/c_function_strcspn.htm
+    input[strcspn(input, "\n")] = '\0';
 
+    // Check for $$ for variable expansion
 	for (int i = 0; i < strlen(input); i ++) {
 		// Remove $$ and add pid
 		if ( (input[i] == '$') && (i + 1 < strlen(input)) && (input[i + 1] == '$') ) {
@@ -243,13 +291,15 @@ void userInput() {
 
 		}
 	}
-
+    
+    // Check for empty entry
     if (strcmp(input, "") == 0) {
         
         return;
 
     }
 
+    // Set argument array and get number of arguments
     argCount = getArguments(arguments, input);
 
     // Check for background process, if foreground mode is not on
@@ -316,15 +366,21 @@ void userInput() {
 }
 
 void checkBackground() {
+    /***********************************************
+    *   Params: NA
+    *   Returns: NA
+    *   Desc: Checks the background for child processes and 
+    *         prints out how they were terminated.
+    ***********************************************/
 
     for(int i = 0; i < bgCount; i++) {
 
         if(waitpid(bgProc[i], &childStatus, WNOHANG) > 0) {
 
             if (WIFSIGNALED(childStatus)) {
-				printf("background child %d terminated: ", bgProc[i]);			//Child PID	
+				printf("background child %d terminated: ", bgProc[i]);
                 fflush(stdout);
-				printf("terminated by signal %d\n", WTERMSIG(childStatus));		//Signal number
+				printf("terminated by signal %d\n", WTERMSIG(childStatus));
                 fflush(stdout);
 
 			}
@@ -343,6 +399,12 @@ void checkBackground() {
 }
 
 void handle_SIGTSTP() {
+    /***********************************************
+    *   Params: NA
+    *   Returns: NA
+    *   Desc: Handler function for ctrl-Z or TSTP. Turns 
+    *         on/off foreground only mode   
+    ***********************************************/
 
     // Foreground mode is currently not turned on, turn it on
     if (fgOnlyMode == 0) {
@@ -365,6 +427,11 @@ void handle_SIGTSTP() {
 
 
 int main(int argc, char *argv[]) {
+    /***********************************************
+    *   Params: NA
+    *   Returns: NA
+    *   Desc: Main function 
+    ***********************************************/
 
     // Ignore Ctrl-C
 	SIGINT_action.sa_handler = SIG_IGN;
@@ -378,9 +445,7 @@ int main(int argc, char *argv[]) {
     SIGTSTP_action.sa_flags = 0;
     sigaction(SIGTSTP, &SIGTSTP_action, NULL);
 
-    // Set pid to the pid of smallsh program
-    pid = getpid();
-
+    // next == 1 keeps the everything running until exit command
     while (next == 1) {
 
         checkBackground();
